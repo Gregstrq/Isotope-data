@@ -11,11 +11,20 @@ function getmeasnames(df)
     return mns = [n for n in ns if (name_uncert(n) in ns)]
 end
 
-measmiss(v, err) = measurement(v, err)
+measmiss(v, err) = (v ± err)
 measmiss(v::Missing, err) = missing
 measmiss(v::Missing, err::Missing) = missing
 # as some half-life data miss an estimation of uncertainty, and measurement(::Float64, Missing) is not defined
-measmiss(v, err::Missing) = v
+# measmiss(v, err::Missing) = isinf(v) ? (v ± zero(v)) : (v ± convert(typeof(v), NaN))
+
+function measmiss(v, err::Missing)
+    isinf(v) && return (v ± zero(v))
+
+    typednan = convert(typeof(ustrip(v)), NaN)
+    unitfulnan = unit(v) * typednan
+    return (v ± unitfulnan)
+end
+
 
 "combine value and it's uncertainty into a measurement value"
 function combine2meas!(df, nm)
