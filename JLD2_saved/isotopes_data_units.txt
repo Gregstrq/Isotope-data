@@ -1,0 +1,4 @@
+Units used:
+mass: amu / dalton
+half-life: second
+quadrupole_moment: barn
