@@ -1,4 +1,4 @@
-using FileIO, JLD2, DataFrames, CSV, Unitful, Serialization, PeriodicTable
+using FileIO, JLD2, DataFrames, CSV, Unitful, PeriodicTable, Measurements
 
 Unitful.register(@__MODULE__)
 
@@ -145,6 +145,50 @@ function parse_nubase(filename::AbstractString)
 	return DataFrame(rows)
 end
 
+
+################
+#
+# Utilities to combine the value and error into a single measurement.
+# Utilities to add fancy superscripts.
+# Utility to strip units for saving to CSV.
+#
+################
+
+measmiss(v, err) = (v ± err)
+measmiss(v::Missing, err) = missing
+measmiss(v::Missing, err::Missing) = missing
+measmiss(v, err::Missing) = isinf(v) ? (v ± zero(v)) : (v ± unit(v)*NaN)
+
+const superscripts = Dict(
+    '0' => '⁰',
+    '1' => '¹',
+    '2' => '²',
+    '3' => '³',
+    '4' => '⁴',
+    '5' => '⁵',
+    '6' => '⁶',
+    '7' => '⁷',
+    '8' => '⁸',
+    '9' => '⁹',
+)
+
+function superstring(x)
+    s = string(x)
+    carr = [superscripts[c] for c in s]
+    return join(carr, "")
+end
+isot_symbol(symbol, mass_number) = string(superstring(mass_number), symbol)
+
+strip_data(x) = x
+strip_data(x::Number) = ustrip(x)
+
+# function to get the header of the dataframe with units
+get_header(df) = .*(names(df), get_df_unit_strs(df))
+get_df_unit_strs(df) = eltype.(eachcol(df)) .|> get_unit_str
+get_unit_str(x) = ""
+get_unit_str(x::Type{<:Quantity}) = " ["*string(unit(x))*"]"
+get_unit_str(x::Type{Union{Missing,T}}) where {T} = get_unit_str(T)
+
 ################
 #
 # Parsing and loading the files
@@ -192,14 +236,15 @@ filter!(:spin=>x->!ismissing(x), isotopes)
 filter(:spin=>x->x==0, isotopes; view=true)[:, [:gfactor,:gfactor_uncertainty,:quadrupole_moment,:quadrupole_moment_uncertainty]] .= [0.0 0.0 0.0u"b" 0.0u"b"]
 filter(:spin=>x->x==1//2, isotopes; view=true)[:, [:quadrupole_moment,:quadrupole_moment_uncertainty]] .= [0.0u"b" 0.0u"b"]
 
-function get_name_symbol(nuclide::AbstractString)
+function get_name_symbol(nuclide::AbstractString, mass_number::Int)
     rm = match(r"\d+(\w+)", nuclide)
     symbol = Symbol(rm.captures[1])
     name = symbol==:n ? "neutron" : elements[symbol].name
-    return name,symbol
+    isymbol = isot_symbol(symbol, mass_number)
+    return name,symbol,isymbol
 end
 select!(isotopes,
-        :nuclide=>ByRow(x->get_name_symbol(x))=>[:name, :symbol],
+        [:nuclide, :mass_number]=>ByRow((x,y)->get_name_symbol(x,y))=>[:name, :symbol, :isot_symbol],
         :atomic_number,
         :mass_number,
         :abundance,
@@ -218,4 +263,18 @@ select!(isotopes,
 
 sort!(isotopes, [:atomic_number, :mass_number])
 
-serialize("isotopes_data.jls", isotopes)
+# saving to csv
+isotopes_csv = isotopes .|> strip_data
+transform!(isotopes_csv, :spin=>ByRow(x->float(x))=>:spin)
+CSV.write("isotopes_data.csv", isotopes_csv; header = get_header(isotopes))
+
+
+select!(isotopes,
+        :name, :symbol, :isot_symbol, :atomic_number, :mass_number, :abundance,
+        [:mass, :mass_uncertainty]=>ByRow((x,y)->measmiss(x,y))=>:mass,
+        :spin, :parity, :is_radioactive,
+        [:half_life, :half_life_uncertainty]=>ByRow((x,y)->measmiss(x,y))=>:half_life,
+        [:gfactor, :gfactor_uncertainty]=>ByRow((x,y)->measmiss(x,y))=>:gfactor,
+        [:quadrupole_moment, :quadrupole_moment_uncertainty]=>ByRow((x,y)->measmiss(x,y))=>:quadrupole_moment
+       )
+jldsave("isotopes_data.jld2"; isotopes)

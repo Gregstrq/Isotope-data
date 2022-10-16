@@ -1,12 +1,16 @@
-using Serialization, DataFrames, Unitful, FileIO
+using DataFrames, Measurements, Unitful, FileIO, JLD2
 
-isotopes = deserialize("isotopes_data.jls")
+isotopes = load("isotopes_data.jld2", "isotopes")
 colnames = names(isotopes)
 
 quantity_repr(x) = repr(x)
 function quantity_repr(x::Quantity)
 	n,u = repr(x)|>split
 	return n*"*"*u
+end
+function quantity_repr(x::Quantity{<:Measurement})
+    x_split = repr(x)|>split
+    return "("*join(x_split[1:end-1], " ")*") * "*x_split[end]
 end
 
 open("isotopes_data.jl", "w") do io

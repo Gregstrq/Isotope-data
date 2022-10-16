@@ -1,0 +1,8 @@
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Measurements = "eff96d63-e80a-5855-80a2-b1b0885c5ab7"
+PeriodicTable = "7b2266bf-644c-5ea3-82d8-af4bbd25a884"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
